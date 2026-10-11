@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#101321">
   <link rel="icon" href="favicon.svg">
   <title>Конвойный кубок — 3D-гонки</title>
-  <link rel="stylesheet" href="style.css?v=5">
-  <script src="render3d.js?v=5" defer></script>
-  <script src="game.js?v=5" defer></script>
+  <link rel="stylesheet" href="style.css?v=6">
+  <script src="render3d.js?v=6" defer></script>
+  <script src="game.js?v=6" defer></script>
 </head>
 <body>
   <main class="shell">
@@ -18,7 +18,7 @@
     </header>
     <section class="intro">
       <div><p class="eyebrow">05 МАШИН / 01 ПОБЕДИТЕЛЬ</p><h1>Конвойный <span>кубок.</span></h1></div>
-      <p class="description">Мигалки включены. Трибуны готовы. <br>Заедь в шлюз колонии первым.</p>
+      <p class="description">Широкая трасса. Трамплины. Пять конвоев. <br>Заедь в шлюз колонии первым.</p>
     </section>
     <section class="game-layout" aria-label="Гонка">
       <div class="game-panel">
@@ -35,7 +35,7 @@
               <div class="hero-cars" aria-hidden="true"><i class="mini-car orange"></i><i class="mini-car red"></i><i class="mini-car blue"></i><i class="mini-car yellow"></i><i class="mini-car purple"></i></div>
               <p class="eyebrow" id="overlay-kicker">СИНЯЯ МАШИНА — ТВОЯ</p>
               <h2 id="overlay-title">Гонка автозаков.</h2>
-              <p id="overlay-description">Чёрные фигурки дают разгон: W, ↑, пробел или кнопка. Синие сотрудники замедляют на 3 секунды. Обгони четыре автозака и пройди шлюз колонии.</p>
+              <p id="overlay-description">Чёрные фигурки дают разгон: W, ↑, пробел или кнопка. Синие сотрудники замедляют на 3 секунды. Лови трамплины, прыгай и обгони четыре автозака.</p>
               <button class="primary-button" id="start">На старт! <span aria-hidden="true">→</span></button>
               <span class="overlay-hint" id="overlay-hint">1 400 метров до въезда в колонию через шлюз.</span>
             </div>
@@ -57,10 +57,10 @@
         <div class="standings-card"><p class="eyebrow">НА ТРАССЕ</p><ol id="standings"><li><i class="dot car-blue"></i><span>Синий конвой <em>ТЫ</em></span><b>1</b></li><li><i class="dot car-red"></i><span>Красный конвой</span><b>2</b></li><li><i class="dot car-yellow"></i><span>Жёлтый конвой</span><b>3</b></li><li><i class="dot car-orange"></i><span>Оранжевый конвой</span><b>4</b></li><li><i class="dot car-purple"></i><span>Фиолетовый конвой</span><b>5</b></li></ol><div class="race-clock">ВРЕМЯ ЗАЕЗДА <span id="time">00:00.0</span></div></div>
         <button id="boost" class="dash-button" disabled><span class="dash-top"><span>↯ РАЗГОН</span><span id="boost-status">СБЕЙ ФИГУРКУ</span></span><span class="dash-track"><span id="boost-fill"></span></span></button>
         <div class="controls-card"><p class="eyebrow">УПРАВЛЕНИЕ</p><div class="control-row"><span class="keys">A / D · ← / →</span><span>Руль</span></div><div class="control-row"><span class="keys">S / ↓</span><span>Тормоз</span></div><div class="control-row"><span class="keys">W / ↑ / SPACE</span><span>Бонусный разгон</span></div><div class="control-row"><span class="keys">P / ESC</span><span>Пауза</span></div><p class="touch-tip">Автозак едет сам. Чёрные фигурки дают разгон на 2,2 секунды. Синие сотрудники замедляют на 3 секунды и прерывают активный разгон. После использования разгона нужен новый чёрный бонус. На телефоне используй кнопку «Разгон».</p></div>
-        <div class="tip"><span>▦</span><p>На финише автозак выравнивается перед КПП и проходит два воротных проёма въездного шлюза.</p></div>
+        <div class="tip"><span>▦</span><p>Наезжай на трамплины со светящимися краями. На разгоне прыжок выше. Финиш — через два воротных проёма шлюза.</p></div>
       </aside>
     </section>
-    <footer class="footer"><span>1 400 метров · пять машин · один кубок</span><span>Автозаки · ФСИН России · въездной шлюз</span></footer>
+    <footer class="footer"><span>1 400 метров · пять машин · один кубок</span><span>ФСИН России · прыжки · въездной шлюз</span></footer>
   </main>
 </body>
 </html>

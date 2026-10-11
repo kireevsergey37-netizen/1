@@ -21,3 +21,6 @@
 
 .car-orange{background:#ff9d4d}.car-purple{background:#b58aff}.mini-car.orange{--car-color:#ff9d4d;transform:rotate(-15deg)}.mini-car.purple{--car-color:#b58aff;transform:rotate(15deg)}.hero-cars{gap:16px}.arena.slowed .drive-hint{background:#294b77;color:#d8ebff}.arena.slowed{outline:3px solid #83b5fb;outline-offset:-3px}
 @media(max-width:760px){.hero-cars{gap:12px}.overlay-card>p:not(.eyebrow){font-size:11px;line-height:1.5}.standings-card li{gap:4px}.standings-card li>span{min-width:0}}
+
+.arena.jumping .drive-hint{background:#37486ecc;color:#c7fff2;border:1px solid #a8edea55}.arena.jumping{outline:2px solid #a5deeb;outline-offset:-2px}.arena.impact{outline:3px solid #ffd094;outline-offset:-3px}
+@media(prefers-reduced-motion:reduce){.arena.impact{outline:none}}

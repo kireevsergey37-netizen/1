@@ -8,8 +8,8 @@
     $('overlay-description').textContent = error.message + ' Включи аппаратное ускорение или попробуй другой браузер.';
     $('start').disabled = true; return;
   }
-  const ROAD_LEFT = 225, ROAD_RIGHT = 735;
-  const FINISH = 1400, GATE_APPROACH = 1260, GATE_ENTRY = 1340, GATE_INNER = 1380, BOOST_DURATION = 2.2, SLOW_DURATION = 3;
+  const ROAD_LEFT = 105, ROAD_RIGHT = 855;
+  const FINISH = 1400, GATE_APPROACH = 1260, GATE_ENTRY = 1340, GATE_INNER = 1380, BOOST_DURATION = 2.2, SLOW_DURATION = 3, GRAVITY = 18;
   const FINISH_BONUSES = [1000, 500, 250, 150, 100];
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const keys = new Set(), steeringPointers = new Map(), brakePointers = new Set();
@@ -23,27 +23,29 @@
   const random = (min, max) => min + Math.random() * (max - min);
 
 
+  const motionState = () => ({ height: 0, verticalSpeed: 0, airborne: false, rampLift: 0, pitch: 0, roll: 0, rollSpeed: 0, suspension: 0, suspensionSpeed: 0, sideSpeed: 0, impact: 0, jumpCount: 0 });
   function reset() {
-    player = { id: 'blue', name: 'Синий конвой', color: '#4298ff', x: 480, d: 0, speed: 0, hull: 100, penalty: 0, slow: 0, hitCooldown: 0, boost: 0, boostReady: false, finishTime: null, isPlayer: true };
+    player = { ...motionState(), id: 'blue', name: 'Синий конвой', color: '#4298ff', x: 480, d: 0, speed: 0, hull: 100, penalty: 0, slow: 0, hitCooldown: 0, boost: 0, boostReady: false, finishTime: null, isPlayer: true };
     const opponents = [
       { id: 'red', name: 'Красный конвой', color: '#ff6479', x: 385, d: -4, parkX: 345, parkD: FINISH, phase: 0 },
       { id: 'yellow', name: 'Жёлтый конвой', color: '#ffd55c', x: 575, d: -8, parkX: 615, parkD: FINISH, phase: 2 },
       { id: 'orange', name: 'Оранжевый конвой', color: '#ff9d4d', x: 295, d: -12, parkX: 345, parkD: FINISH + 20, phase: 4 },
       { id: 'purple', name: 'Фиолетовый конвой', color: '#b58aff', x: 665, d: -16, parkX: 615, parkD: FINISH + 20, phase: 6 }
     ];
-    cars = [player, ...opponents.map(car => ({ ...car, targetX: car.x, speed: 0, boost: 0, boostReady: false, hull: 100, penalty: 0, slow: 0, hitCooldown: 0, finishTime: null }))];
+    cars = [player, ...opponents.map(car => ({ ...motionState(), ...car, targetX: car.x, speed: 0, boost: 0, boostReady: false, hull: 100, penalty: 0, slow: 0, hitCooldown: 0, finishTime: null }))];
     objects = []; particles = []; messages = []; pairCooldowns = new Map();
     elapsed = score = hitCount = 0; gateOwner = null; keys.clear(); steeringPointers.clear(); brakePointers.clear(); pointer = null; activePointer = null;
     objects.push({ kind: 'person', x: 480, d: 95, taken: false });
     objects.push({ kind: 'employee', x: 480, d: 170, taken: false });
     objects.push({ kind: 'barrier', x: 480, d: 210, taken: false });
-    const lanes = [295, 385, 480, 575, 665];
+    const lanes = [175, 330, 480, 630, 785];
     for (let d = 270; d < FINISH - 110; d += 65) {
       const lane = Math.floor(random(0, lanes.length));
       objects.push({ kind: Math.floor(d / 65) % 3 === 0 ? 'barrier' : 'person', x: lanes[lane], d, taken: false });
       if (Math.floor(d / 65) % 2 === 0) objects.push({ kind: 'cone', x: lanes[(lane + 2) % lanes.length], d: d + 15, taken: false });
       else if (d + 30 < GATE_APPROACH - 30) objects.push({ kind: 'employee', x: lanes[(lane + 1) % lanes.length], d: d + 30, taken: false });
     }
+    for (const [d, x] of [[320, 480], [580, 330], [820, 630], [1040, 480], [1170, 520]]) objects.push({ kind: 'ramp', x, d, passedBy: [], taken: false });
     lastHud = ''; updateHud();
   }
   function burst(x, d, color, count = 16) {
@@ -52,6 +54,18 @@
       const angle = random(0, Math.PI * 2), speed = random(20, 90);
       particles.push({ x, d, vx: Math.cos(angle) * speed, vd: Math.sin(angle) * speed / 2.5, life: .65, color });
     }
+  }
+  function impactBurst(x, d, strength = 1, dust = false) {
+    if (reducedMotion) return;
+    for (let i = 0; i < (dust ? 10 : 22); i++) {
+      const life = random(.3, .75);
+      particles.push({ x, d, vx: random(-110, 110) * strength, vd: random(-15, 15), y: dust ? .15 : .8, vy: random(2, 7), life, maxLife: life, kind: dust ? 'dust' : 'spark', color: dust ? '#a9a79c' : ['#ffe3a2', '#ffb451', '#fff2ce'][i % 3] });
+    }
+  }
+  function kick(car, direction, strength = 1) {
+    car.sideSpeed = clamp(car.sideSpeed + direction * 105 * strength, -170, 170);
+    car.rollSpeed += direction * 1.7 * strength;
+    car.suspensionSpeed = 1.3 * strength; car.impact = .65;
   }
   function popup(text, x, d, color = '#83f5da') { messages.push({ text, x, d, life: 1.1, color }); }
   function showOverlay(kicker, title, description, button, hint) {
@@ -110,7 +124,7 @@
   function damage(car, amount, penalty, label) {
     if (car.hitCooldown > 0) return false;
     car.hull = Math.max(0, car.hull - amount); car.penalty = Math.max(car.penalty, penalty); car.hitCooldown = .9;
-    burst(car.x, car.d, '#ffcf6b');
+    impactBurst(car.x, car.d); car.impact = .45; car.suspensionSpeed = .9;
     if (car.isPlayer && label) popup(label, car.x, car.d + 20, '#ffac87');
     if (!car.isPlayer && car.hull <= 0) { car.hull = 55; car.penalty = 3; }
     return true;
@@ -125,11 +139,29 @@
     if (!steer && pointer !== null) steer = clamp((pointer - player.x) / 45, -1, 1);
     steerValue = player.d >= GATE_APPROACH ? 0 : clamp(steer, -1, 1);
     player.yaw = -steerValue * .12;
-    player.x += steerValue * (185 + Math.min(player.speed, 60) * 1.3) * dt;
+    player.x += steerValue * (185 + Math.min(player.speed, 60) * 1.3) * (player.airborne ? .55 : 1) * dt;
     if (player.x < ROAD_LEFT + 29 || player.x > ROAD_RIGHT - 29) {
       player.x = clamp(player.x, ROAD_LEFT + 29, ROAD_RIGHT - 29); damage(player, 5, .5, 'ЗАБОР −5%');
     }
     for (const car of cars) {
+      car.impact = Math.max(0, car.impact - dt);
+      car.rollSpeed += (-36 * car.roll - 8 * car.rollSpeed) * dt;
+      car.roll = clamp(car.roll + car.rollSpeed * dt, -.24, .24);
+      car.suspensionSpeed += (-70 * car.suspension - 11 * car.suspensionSpeed) * dt;
+      car.suspension = clamp(car.suspension + car.suspensionSpeed * dt, -.2, .2);
+      car.x = clamp(car.x + car.sideSpeed * dt, ROAD_LEFT + 29, ROAD_RIGHT - 29);
+      car.sideSpeed *= Math.exp(-6 * dt);
+      if (car.airborne) {
+        car.verticalSpeed -= GRAVITY * dt; car.height += car.verticalSpeed * dt;
+        car.pitch = -clamp(car.verticalSpeed * .02, -.19, .22);
+        if (car.height <= 0) {
+          car.height = 0; car.verticalSpeed = 0; car.airborne = false; car.pitch = 0;
+          car.suspensionSpeed = -1.6; car.impact = .3;
+          impactBurst(car.x, car.d, .6, true);
+          if (car.isPlayer) popup('МЯГКАЯ ПОСАДКА', car.x, car.d + 18, '#b8f7e8');
+        }
+      } else car.pitch *= Math.exp(-8 * dt);
+      car.rampLift = 0;
       car.penalty = Math.max(0, car.penalty - dt); car.slow = Math.max(0, car.slow - dt); car.hitCooldown = Math.max(0, car.hitCooldown - dt); car.boost = Math.max(0, car.boost - dt);
       if (car.finishTime !== null) {
         car.speed = car.d < car.parkD ? 8 : 0;
@@ -146,7 +178,7 @@
       } else {
         if (car.boostReady && car.boost <= 0 && car.slow <= 0 && car.d < GATE_APPROACH) { car.boost = BOOST_DURATION; car.boostReady = false; }
         if (car.boost > 0) { targetSpeed = 60; acceleration = 38; }
-        const obstacle = objects.find(o => !o.taken && o.kind !== 'person' && o.d > car.d && o.d - car.d < 65 && Math.abs(o.x - car.x) < 60);
+        const obstacle = objects.find(o => !o.taken && o.kind !== 'person' && o.kind !== 'ramp' && o.d > car.d && o.d - car.d < 65 && Math.abs(o.x - car.x) < 60);
         if (obstacle) car.targetX = obstacle.x > car.x ? obstacle.x - 115 : obstacle.x + 115;
         else car.targetX += Math.sin(elapsed * .75 + car.phase) * dt * 16;
         car.targetX = clamp(car.targetX, ROAD_LEFT + 50, ROAD_RIGHT - 50);
@@ -155,7 +187,7 @@
       }
       if (car.d >= GATE_APPROACH) {
         // Line up with the narrow vehicle gate, then drive through both doors.
-        car.x += clamp(480 - car.x, -140 * dt, 140 * dt); car.yaw = 0; car.boost = 0;
+        car.x += clamp(480 - car.x, -140 * dt, 140 * dt); car.yaw = 0; car.boost = 0; car.sideSpeed = 0;
         targetSpeed = car === gateOwner ? 12 : car.d < GATE_ENTRY - 18 ? 12 : 0;
       }
       if (car.slow > 0) targetSpeed = Math.min(targetSpeed, 18);
@@ -171,6 +203,21 @@
       }
       if (car.d >= FINISH) { car.finishTime = elapsed - dt + (FINISH - oldDistance) / Math.max(car.speed, .01); car.d = FINISH; }
       for (const object of objects) {
+        if (object.kind === 'ramp') {
+          if (!car.airborne && Math.abs(object.x - car.x) < 50 && !object.passedBy.includes(car.id)) {
+            if (car.d >= object.d - 15 && car.d < object.d) {
+              car.rampLift = (car.d - object.d + 15) / 15 * 1.1; car.pitch = -.12;
+            }
+            if (oldDistance < object.d && car.d >= object.d) {
+              object.passedBy.push(car.id); car.height = 1.1;
+              car.verticalSpeed = 4 + car.speed * .12; car.airborne = true;
+              car.pitch = -.2; car.jumpCount++;
+              if (car.isPlayer) { popup('ПРЫЖОК!', car.x, car.d + 18, '#b3fff0'); $('announcement').textContent = 'Прыжок с трамплина! Автозак светится в воздухе.'; }
+            }
+          }
+          continue;
+        }
+        if (car.height > 1.3) continue;
         if (object.taken || Math.abs(object.d - car.d) > 6 || Math.abs(object.x - car.x) > (object.kind === 'barrier' ? 53 : 32)) continue;
         object.taken = true;
         if (object.kind === 'person') {
@@ -190,17 +237,21 @@
     for (const [key, time] of pairCooldowns) { if (time <= dt) pairCooldowns.delete(key); else pairCooldowns.set(key, time - dt); }
     for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
       const a = cars[i], b = cars[j], key = `${a.id}-${b.id}`;
-      if (a.finishTime !== null || b.finishTime !== null || pairCooldowns.has(key) || a.d >= GATE_APPROACH || b.d >= GATE_APPROACH || Math.abs(a.d - b.d) > 13 || Math.abs(a.x - b.x) > 52) continue;
+      if (a.finishTime !== null || b.finishTime !== null || Math.abs(a.height - b.height) > 1.4 || pairCooldowns.has(key) || a.d >= GATE_APPROACH || b.d >= GATE_APPROACH || Math.abs(a.d - b.d) > 13 || Math.abs(a.x - b.x) > 52) continue;
       pairCooldowns.set(key, 1.2);
       const direction = a.x <= b.x ? -1 : 1;
-      a.x = clamp(a.x + direction * 24, ROAD_LEFT + 29, ROAD_RIGHT - 29);
-      b.x = clamp(b.x - direction * 24, ROAD_LEFT + 29, ROAD_RIGHT - 29);
+      const separation = (54 - Math.abs(a.x - b.x)) / 2 + 2;
+      a.x = clamp(a.x + direction * separation, ROAD_LEFT + 29, ROAD_RIGHT - 29);
+      b.x = clamp(b.x - direction * separation, ROAD_LEFT + 29, ROAD_RIGHT - 29);
+      const strength = clamp(.6 + Math.abs(a.speed - b.speed) / 45, .6, 1.2);
+      kick(a, direction, strength); kick(b, -direction, strength);
+      impactBurst((a.x + b.x) / 2, (a.d + b.d) / 2, strength);
       if (!a.isPlayer) a.targetX = a.x;
       if (!b.isPlayer) b.targetX = b.x;
       damage(a, 7, .55); damage(b, 12, .8);
       if (a.isPlayer || b.isPlayer) { score += 50; popup('+50 ТАРАН', player.x, player.d + 25); }
     }
-    for (const p of particles) { p.x += p.vx * dt; p.d += p.vd * dt; p.life -= dt; }
+    for (const p of particles) { p.x += p.vx * dt; p.d += p.vd * dt; p.life -= dt; if (p.y !== undefined) { p.vy -= 14 * dt; p.y = Math.max(.05, p.y + p.vy * dt); } }
     particles = particles.filter(p => p.life > 0);
     for (const m of messages) m.life -= dt;
     messages = messages.filter(m => m.life > 0);
@@ -228,11 +279,13 @@
     $('boost-status').textContent = player.d >= GATE_APPROACH ? 'ВЪЕЗД В ШЛЮЗ' : player.slow > 0 ? `ЗАМЕДЛЕН ${player.slow.toFixed(1)} СЕК` : player.boost > 0 ? `${player.boost.toFixed(1)} СЕК` : player.boostReady ? 'ГОТОВ' : 'СБЕЙ ФИГУРКУ';
     $('boost-fill').style.width = `${player.boost > 0 ? 100 * player.boost / BOOST_DURATION : player.boostReady ? 100 : 0}%`;
     $('arena').classList.toggle('slowed', player.slow > 0);
-    $('drive-hint').textContent = player.d >= GATE_APPROACH ? (player === gateOwner ? 'ШЛЮЗ · ВЪЕЗЖАЕМ В КОЛОНИЮ' : 'КПП · ОЖИДАЕМ СВОБОДНЫЙ ШЛЮЗ') : player.slow > 0 ? `СОТРУДНИК · ЗАМЕДЛЕНИЕ ${player.slow.toFixed(1)} СЕК` : player.boostReady ? 'W / ↑ / SPACE — РАЗГОН НА 2,2 СЕК' : 'ЧЁРНЫЕ → РАЗГОН · СИНИЕ → ЗАМЕДЛЕНИЕ';
+    $('arena').classList.toggle('jumping', player.airborne);
+    $('arena').classList.toggle('impact', player.impact > .35 && !reducedMotion);
+    $('drive-hint').textContent = player.d >= GATE_APPROACH ? (player === gateOwner ? 'ШЛЮЗ · ВЪЕЗЖАЕМ В КОЛОНИЮ' : 'КПП · ОЖИДАЕМ СВОБОДНЫЙ ШЛЮЗ') : player.airborne ? 'ПРЫЖОК · ЦВЕТНОЕ СВЕЧЕНИЕ' : player.slow > 0 ? `СОТРУДНИК · ЗАМЕДЛЕНИЕ ${player.slow.toFixed(1)} СЕК` : player.boostReady ? 'W / ↑ / SPACE — РАЗГОН НА 2,2 СЕК' : 'ЧЁРНЫЕ → РАЗГОН · СИНИЕ → ЗАМЕДЛЕНИЕ';
   }
 
   function draw() {
-    renderer.draw({player, cars, objects, particles, gate: {owner: gateOwner ? gateOwner.id : null, distance: gateOwner ? gateOwner.d : GATE_APPROACH, entry: GATE_ENTRY, inner: GATE_INNER}, time: visualTime, reduced: reducedMotion});
+    renderer.draw({player, cars, objects, particles, gate: {owner: gateOwner ? gateOwner.id : null, distance: gateOwner ? gateOwner.d : GATE_APPROACH, entry: GATE_ENTRY, inner: GATE_INNER}, time: visualTime, reduced: reducedMotion, road: {left: ROAD_LEFT, right: ROAD_RIGHT}});
     const message = messages.at(-1);
     $('race-message').textContent = message ? message.text : '';
     $('race-message').hidden = !message;
