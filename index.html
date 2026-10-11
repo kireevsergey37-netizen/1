@@ -4,15 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#101321">
-  <title>Конвойный кубок — пиксельные гонки</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="game.js" defer></script>
+  <link rel="icon" href="favicon.svg">
+  <title>Конвойный кубок — 3D-гонки</title>
+  <link rel="stylesheet" href="style.css?v=3">
+  <script src="render3d.js?v=3" defer></script>
+  <script src="game.js?v=3" defer></script>
 </head>
 <body>
   <main class="shell">
     <header class="header">
       <a class="brand" href="./" aria-label="Конвойный кубок, главная"><span class="brand-icon">▦</span> CONVOY CUP</a>
-      <span class="badge"><span></span> ПИКСЕЛЬНАЯ ГОНКА · HTML5</span>
+      <span class="badge"><span></span> 3D ГОНКА · WEBGL</span>
     </header>
     <section class="intro">
       <div><p class="eyebrow">03 МАШИНЫ / 01 ПОБЕДИТЕЛЬ</p><h1>Конвойный <span>кубок.</span></h1></div>
@@ -32,15 +34,19 @@
             <div class="overlay-card">
               <div class="hero-cars" aria-hidden="true"><i class="mini-car red"></i><i class="mini-car blue"></i><i class="mini-car yellow"></i></div>
               <p class="eyebrow" id="overlay-kicker">СИНЯЯ МАШИНА — ТВОЯ</p>
-              <h2 id="overlay-title">Три конвоя. Один финиш.</h2>
-              <p id="overlay-description">Обгони красную и жёлтую машины. Тарань соперников, объезжай препятствия и собирай бонусы за фигурки на трассе.</p>
+              <h2 id="overlay-title">Конвойный кубок в 3D.</h2>
+              <p id="overlay-description">Удерживай W или ↑, чтобы разогнаться. Пробел — турбо. Обгони соперников и доберись до ворот первым.</p>
               <button class="primary-button" id="start">На старт! <span aria-hidden="true">→</span></button>
               <span class="overlay-hint" id="overlay-hint">1 400 метров до ворот исправительной колонии.</span>
             </div>
           </div>
+          <div id="race-message" class="race-message" hidden></div>
+          <div class="drive-hint">↑ / W — ГАЗ · SPACE — ТУРБО</div>
           <div id="announcement" class="sr-only" role="status" aria-live="polite"></div>
           <div class="touch-controls" id="touch-controls" hidden aria-label="Сенсорное управление">
             <button class="steer-button" id="left" aria-label="Повернуть влево">←</button>
+            <button class="pedal-button brake-button" id="mobile-brake" aria-label="Тормоз">ТОРМОЗ</button>
+            <button class="pedal-button gas-button" id="mobile-gas" aria-label="Газ">ГАЗ</button>
             <button class="mobile-boost" id="mobile-boost" aria-label="Ускорение">ТУРБО</button>
             <button class="steer-button" id="right" aria-label="Повернуть вправо">→</button>
           </div>
@@ -50,12 +56,13 @@
       <aside class="sidebar">
         <div class="record-card"><p class="eyebrow">БОНУСЫ ЗА ЗАЕЗД</p><div class="record-value"><span id="score">0</span><span class="record-star">+</span></div><p>Фигурка +100 · таран соперника +50</p><div class="personal-best">РЕКОРД <span id="best">0</span></div></div>
         <div class="standings-card"><p class="eyebrow">НА ТРАССЕ</p><ol id="standings"><li><i class="dot car-blue"></i><span>Синий конвой <em>ТЫ</em></span><b>1</b></li><li><i class="dot car-red"></i><span>Красный конвой</span><b>2</b></li><li><i class="dot car-yellow"></i><span>Жёлтый конвой</span><b>3</b></li></ol><div class="race-clock">ВРЕМЯ ЗАЕЗДА <span id="time">00:00.0</span></div></div>
+        <button id="gas" class="gas-pedal" disabled><span>↑ ГАЗ</span><small>УДЕРЖИВАЙ · ДО 216 КМ/Ч</small></button>
         <button id="boost" class="dash-button" disabled><span class="dash-top"><span>↯ ТУРБО</span><span id="boost-status">ГОТОВО</span></span><span class="dash-track"><span id="boost-fill"></span></span></button>
-        <div class="controls-card"><p class="eyebrow">УПРАВЛЕНИЕ</p><div class="control-row"><span class="keys">A / D · ← / →</span><span>Руль</span></div><div class="control-row"><span class="keys">W / S · ↑ / ↓</span><span>Газ / тормоз</span></div><div class="control-row"><span class="keys">SPACE</span><span>Турбо</span></div><div class="control-row"><span class="keys">P / ESC</span><span>Пауза</span></div><p class="touch-tip">Машина едет сама. На телефоне используй кнопки на поле или веди пальцем по дороге.</p></div>
+        <div class="controls-card"><p class="eyebrow">УПРАВЛЕНИЕ</p><div class="control-row"><span class="keys">A / D · ← / →</span><span>Руль</span></div><div class="control-row"><span class="keys">W / S · ↑ / ↓</span><span>Газ / тормоз</span></div><div class="control-row"><span class="keys">SPACE</span><span>Турбо</span></div><div class="control-row"><span class="keys">P / ESC</span><span>Пауза</span></div><p class="touch-tip">Без газа машина едет на малой скорости. Удерживай ↑ / W или «Газ» для разгона. На телефоне можно одновременно рулить и нажимать газ.</p></div>
         <div class="tip"><span>▦</span><p>Зелёные полосы — на всех машинах. Синие мигалки — тоже. Победа достанется самому ловкому!</p></div>
       </aside>
     </section>
-    <footer class="footer"><span>1 400 метров · три машины · один кубок</span><span>Трибуны болеют. Мигалки сияют.</span></footer>
+    <footer class="footer"><span>1 400 метров · три машины · один кубок</span><span>Объёмная трасса. Настоящий разгон.</span></footer>
   </main>
 </body>
 </html>
