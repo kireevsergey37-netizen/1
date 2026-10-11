@@ -23,6 +23,7 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
         if (window.renderEveryFrame || ++frames % 6 === 0) return draw.call(this, state);
       };
     });
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 10000));
     await page.clock.runFor(100);
     return page;
   }
@@ -58,8 +59,9 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
     await page.clock.runFor(1650);
     assert.equal((await page.evaluate(() => observed.player.boost)), 0, 'Boost ends after 2.2 seconds');
     assert(await page.locator('#boost').isDisabled(), 'Waiting does not replenish the charge');
-    await page.keyboard.down('s'); await page.clock.runFor(2500); await page.keyboard.up('s');
+    await page.keyboard.down('s'); await page.clock.runFor(2500);
     assert.equal(await page.locator('#speed').textContent(), '0', 'Brake stops the car');
+    await page.keyboard.up('s');
     await page.keyboard.press('p');
     const paused = await page.locator('#distance').textContent();
     await page.clock.runFor(1000);
