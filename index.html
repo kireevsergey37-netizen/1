@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#101321">
   <link rel="icon" href="favicon.svg">
   <title>Конвойный кубок — 3D-гонки</title>
-  <link rel="stylesheet" href="style.css?v=6">
-  <script src="render3d.js?v=6" defer></script>
-  <script src="game.js?v=6" defer></script>
+  <link rel="stylesheet" href="style.css?v=7">
+  <script src="render3d.js?v=7" defer></script>
+  <script src="game.js?v=7" defer></script>
 </head>
 <body>
   <main class="shell">
@@ -21,12 +21,15 @@
       <p class="description">Широкая трасса. Трамплины. Пять конвоев. <br>Заедь в шлюз колонии первым.</p>
     </section>
     <section class="game-layout" aria-label="Гонка">
-      <div class="game-panel">
+      <div class="game-panel" id="game-panel">
         <div class="scoreboard">
           <div><span class="stat-label">МЕСТО</span><strong id="place">1 <small>/ 5</small></strong></div>
           <div><span class="stat-label">СКОРОСТЬ</span><strong><span id="speed">0</span> <small>км/ч</small></strong></div>
           <div><span class="stat-label">КУЗОВ</span><strong id="hull" class="hull">100%</strong></div>
-          <button id="pause" class="icon-button" disabled aria-label="Пауза" title="Пауза (P)"><span class="pause-symbol" aria-hidden="true"></span></button>
+          <div class="game-actions">
+            <button id="fullscreen" class="icon-button" aria-label="На весь экран" aria-pressed="false" title="На весь экран"><span aria-hidden="true">⛶</span></button>
+            <button id="pause" class="icon-button" disabled aria-label="Пауза" title="Пауза (P)"><span class="pause-symbol" aria-hidden="true"></span></button>
+          </div>
         </div>
         <div class="arena" id="arena">
           <canvas id="game" width="960" height="600" tabindex="0" aria-label="Гоночная трасса. Стрелки или WASD — управление, пробел — ускорение, P — пауза."></canvas>

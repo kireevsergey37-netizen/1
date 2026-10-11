@@ -24,3 +24,8 @@
 
 .arena.jumping .drive-hint{background:#37486ecc;color:#c7fff2;border:1px solid #a8edea55}.arena.jumping{outline:2px solid #a5deeb;outline-offset:-2px}.arena.impact{outline:3px solid #ffd094;outline-offset:-3px}
 @media(prefers-reduced-motion:reduce){.arena.impact{outline:none}}
+
+.scoreboard>.game-actions{flex-direction:row;gap:8px;margin-left:auto;flex-shrink:0}.game-actions .icon-button{margin-left:0}#fullscreen{font-size:22px;line-height:1}
+body.game-expanded{overflow:hidden}.game-panel.is-fullscreen{display:flex;flex-direction:column;width:100%;height:100%;border:0;border-radius:0}.game-panel.is-expanded{position:fixed;inset:0;z-index:1000;width:100vw;height:100vh;height:100dvh}.game-panel.is-fullscreen .scoreboard{flex-shrink:0}.game-panel.is-fullscreen .arena{flex:1;min-height:0;aspect-ratio:auto;width:100%}.game-panel.is-fullscreen .race-progress{flex-shrink:0}.game-panel.is-fullscreen .touch-controls:not([hidden]){display:flex}
+@media(max-height:600px){.game-panel.is-fullscreen .scoreboard{height:52px;padding-top:6px;padding-bottom:6px}.game-panel.is-fullscreen .race-progress{padding-top:8px;padding-bottom:8px}.game-panel.is-fullscreen .hero-cars,.game-panel.is-fullscreen .overlay-hint{display:none}.game-panel.is-fullscreen .overlay-card>p:not(.eyebrow){margin-bottom:12px}.game-panel.is-fullscreen .overlay-card h2{margin:4px 0 8px}.game-panel.is-fullscreen .overlay{padding:10px}}
+@media(max-width:360px){.scoreboard{gap:10px}.scoreboard>.game-actions{gap:6px}}

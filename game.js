@@ -296,6 +296,45 @@
     canvas.width = Math.round(bounds.width * ratio); canvas.height = Math.round(bounds.height * ratio);
     draw();
   }
+  const gamePanel = $('game-panel'), fullscreenButton = $('fullscreen');
+  const nativeFullscreen = () => document.fullscreenElement || document.webkitFullscreenElement;
+  function syncFullscreen() {
+    const active = nativeFullscreen() === gamePanel || gamePanel.classList.contains('is-expanded');
+    gamePanel.classList.toggle('is-fullscreen', active);
+    document.body.classList.toggle('game-expanded', active);
+    fullscreenButton.setAttribute('aria-pressed', String(active));
+    fullscreenButton.setAttribute('aria-label', active ? 'Свернуть игру' : 'На весь экран');
+    fullscreenButton.title = active ? 'Свернуть игру (Esc)' : 'На весь экран';
+    fullscreenButton.firstElementChild.textContent = active ? '⤡' : '⛶';
+    keys.clear(); steeringPointers.clear(); brakePointers.clear(); pointer = null; activePointer = null;
+    requestAnimationFrame(resize);
+  }
+  async function toggleFullscreen() {
+    fullscreenButton.disabled = true;
+    try {
+      if (nativeFullscreen() === gamePanel) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else document.webkitExitFullscreen();
+      } else if (gamePanel.classList.contains('is-expanded')) {
+        gamePanel.classList.remove('is-expanded');
+      } else if (gamePanel.requestFullscreen) {
+        await gamePanel.requestFullscreen();
+      } else if (gamePanel.webkitRequestFullscreen) {
+        gamePanel.webkitRequestFullscreen();
+      } else {
+        gamePanel.classList.add('is-expanded');
+      }
+    } catch {
+      // Browsers without permission for native fullscreen can still fill the window.
+      if (!nativeFullscreen()) gamePanel.classList.add('is-expanded');
+      else $('announcement').textContent = 'Для выхода из полного экрана нажми Esc.';
+    } finally {
+      syncFullscreen(); fullscreenButton.disabled = false;
+    }
+  }
+  fullscreenButton.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  document.addEventListener('webkitfullscreenchange', syncFullscreen);
   function frame(now) {
     const dt = lastFrame ? Math.min((now - lastFrame) / 1000, .04) : 0; lastFrame = now;
     if (mode === 'playing' || mode === 'idle') visualTime += dt;
@@ -304,6 +343,9 @@
   }
   const movementKeys = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
   window.addEventListener('keydown', event => {
+    if (event.code === 'Escape' && gamePanel.classList.contains('is-fullscreen')) {
+      event.preventDefault(); if (!event.repeat) toggleFullscreen(); return;
+    }
     if (mode === 'playing' && (movementKeys.includes(event.code) || event.code === 'Space')) {
       if (event.code === 'Space' && event.target instanceof HTMLButtonElement) return;
       event.preventDefault(); keys.add(event.code); if (['Space', 'KeyW', 'ArrowUp'].includes(event.code) && !event.repeat) boost();
