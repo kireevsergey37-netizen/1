@@ -40,6 +40,9 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
       return !!gl && gl.isEnabled(gl.DEPTH_TEST) && gl.getError() === gl.NO_ERROR;
     }), 'WebGL renderer uses depth testing without errors');
     await page.getByRole('button', { name: 'На старт!' }).click();
+    assert.equal(await page.locator('#standings li').count(), 5, 'All five trucks have standings');
+    assert((await page.locator('#place').textContent()).includes('/ 5'));
+    assert.equal((await page.evaluate(() => observed.cars)).length, 5);
     assert(await page.locator('#boost').isDisabled(), 'No boost before a bonus collision');
     await page.keyboard.press('Space'); await page.keyboard.down('w');
     await page.clock.runFor(3000); await page.keyboard.up('w');
@@ -47,7 +50,7 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
     assert(cruising >= 135 && cruising <= 138, 'Empty boost keys leave the normal cruise speed');
     assert.equal((await page.evaluate(() => observed.player.boost)), 0);
     assert.equal(await page.locator('#score').textContent(), '0');
-    await screenshot(page, '/tmp/convoy-v4-trucks.png');
+    await screenshot(page, '/tmp/convoy-v5-trucks.png');
     await page.clock.runFor(1500);
     assert.equal(await page.locator('#score').textContent(), '100', 'Bonus character scores +100');
     assert(!(await page.locator('#boost').isDisabled()), 'Character collision grants a charge');
@@ -71,6 +74,48 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
     await page.close();
     console.log('PASS: WebGL, bonus-only boost, empty keys, 2.2s expiry, steering, braking and pause.');
 
+    for (const withBoost of [false, true]) {
+      const staff = await open();
+      await staff.getByRole('button', { name: 'На старт!' }).click();
+      await staff.clock.runFor(5000);
+      const beforeHit = await staff.evaluate(() => observed);
+      assert(beforeHit.player.boostReady && beforeHit.player.slow === 0);
+      assert(beforeHit.objects.some(o => o.kind === 'employee' && !o.taken), 'Blue employees are on the road');
+      await screenshot(staff, '/tmp/convoy-v5-employee.png');
+      if (withBoost) { await staff.keyboard.press('Space'); await staff.clock.runFor(100); }
+      for (let i = 0; i < 20 && (await staff.evaluate(() => observed.player.slow)) === 0; i++) await staff.clock.runFor(100);
+      const hit = await staff.evaluate(() => observed);
+      assert(hit.player.slow > 2.8 && hit.player.speed <= 18, 'Employee collision slows for three seconds');
+      assert.equal(hit.player.hull, beforeHit.player.hull, 'Employee adds no hull damage');
+      assert.equal(await staff.locator('#score').textContent(), '100', 'Employee adds no points');
+      assert.equal(hit.player.boost, 0, 'Employee cancels active acceleration');
+      assert.equal(hit.player.boostReady, !withBoost, 'Employee does not grant a charge or consume an unused one');
+      assert(await staff.locator('#boost').isDisabled(), 'Boost unavailable during slowdown');
+      await staff.keyboard.press('Space'); await staff.clock.runFor(100);
+      assert.equal(await staff.evaluate(() => observed.player.boost), 0, 'Keyboard cannot bypass slowdown');
+      await staff.keyboard.press('p');
+      const pausedSlow = await staff.evaluate(() => observed.player.slow);
+      await staff.clock.runFor(1000);
+      assert.equal(await staff.evaluate(() => observed.player.slow), pausedSlow, 'Pause freezes slowdown duration');
+      await staff.keyboard.press('Escape');
+      // Brake while other racers pass, so recovery is not confused with a new ram.
+      await staff.keyboard.down('s'); await staff.clock.runFor(1000);
+      assert(await staff.evaluate(() => observed.player.slow > 0 && observed.player.speed <= 18), 'Slowdown persists before expiry');
+      await screenshot(staff, '/tmp/convoy-v5-slowdown.png');
+      await staff.clock.runFor(2100);
+      assert.equal(await staff.evaluate(() => observed.player.slow), 0, 'Slowdown expires automatically');
+      await staff.keyboard.down('d'); await staff.clock.runFor(1000); await staff.keyboard.up('d');
+      await staff.keyboard.up('s'); await staff.clock.runFor(3000);
+      assert((await staff.evaluate(() => observed.player.speed)) >= 37, 'Normal driving resumes');
+      if (!withBoost) {
+        assert(!(await staff.locator('#boost').isDisabled()), 'Stored black bonus becomes usable again');
+        await staff.keyboard.press('Space'); await staff.clock.runFor(100);
+        assert((await staff.evaluate(() => observed.player.boost)) > 0);
+      }
+      await staff.close();
+    }
+    console.log('PASS: blue employee slowdown, boost cancellation, stored charge, pause and recovery.');
+
     const ram = await open();
     await ram.getByRole('button', { name: 'На старт!' }).click();
     await ram.keyboard.down('a'); await ram.clock.runFor(650); await ram.keyboard.up('a');
@@ -82,23 +127,23 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
     const race = await open();
     await race.getByRole('button', { name: 'На старт!' }).click();
     let held = null, sawGate = false, sawOuter = false, sawInner = false;
-    for (let i = 0; i < 200 && !(await race.locator('#overlay').isVisible()); i++) {
+    for (let i = 0; i < 240 && !(await race.locator('#overlay').isVisible()); i++) {
       const state = await race.evaluate(() => observed);
-      if (state.player.boostReady && state.player.boost === 0 && state.player.d < 1280) await race.keyboard.press('Space');
+      if (state.player.boostReady && state.player.boost === 0 && state.player.slow === 0 && state.player.d < 1260) await race.keyboard.press('Space');
       const upcoming = state.objects.filter(o => !o.taken && o.kind !== 'person' && o.d > state.player.d - 5 && o.d < state.player.d + 65);
       const candidates = [295, 385, 480, 575, 665].filter(x => upcoming.every(o => Math.abs(o.x-x) > (o.kind === 'barrier' ? 75 : 50)));
       const target = candidates.sort((a,b) => Math.abs(a-state.player.x)-Math.abs(b-state.player.x))[0] ?? 480;
-      const desired = state.player.d >= 1280 || Math.abs(target-state.player.x) < 15 ? null : target > state.player.x ? 'd' : 'a';
+      const desired = state.player.d >= 1260 || Math.abs(target-state.player.x) < 15 ? null : target > state.player.x ? 'd' : 'a';
       if (held !== desired) { if (held) await race.keyboard.up(held); if (desired) await race.keyboard.down(desired); held = desired; }
       await race.clock.runFor(350);
       const after = await race.evaluate(() => observed);
-      if (!sawGate && after.player.d > 1270) { await screenshot(race, '/tmp/convoy-v4-colony.png'); sawGate = true; }
+      if (!sawGate && after.player.d > 1270) { await screenshot(race, '/tmp/convoy-v5-colony.png'); sawGate = true; }
       if (!sawOuter && after.player.d > 1340) {
         assert.equal(after.gate.owner, 'blue', 'Only the sluice owner enters');
         assert(Math.abs(after.player.x-480) < 1, `Truck aligns with the gate: x=${after.player.x}, d=${after.player.d}, speed=${after.player.speed}`);
         assert.equal(after.player.finishTime, null, 'Outer gate is not the finish');
         assert(after.player.speed <= 12, 'Sluice speed is reduced');
-        await screenshot(race, '/tmp/convoy-v4-sluice.png'); sawOuter = true;
+        await screenshot(race, '/tmp/convoy-v5-sluice.png'); sawOuter = true;
       }
       if (!sawInner && after.player.d > 1380 && after.player.d < 1400) {
         assert.equal(after.player.finishTime, null, 'Truck traverses the second gate before finishing'); sawInner = true;
@@ -111,7 +156,7 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
     assert(final.player.finishTime > 0 && final.player.hull > 0);
     assert((await race.locator('#overlay-description').textContent()).includes('заехал через шлюз'));
     assert.equal(await race.locator('#progress-fill').evaluate(e => e.style.width), '100%');
-    const record = Number(await race.locator('#best').textContent()); assert(record >= 250);
+    const record = Number(await race.locator('#best').textContent()); assert(Number.isFinite(record) && record >= 100);
     await race.getByRole('button', { name: 'Ещё один заезд' }).click();
     assert.equal(await race.locator('#speed').textContent(), '0'); assert.equal(await race.locator('#hull').textContent(), '100%');
     assert(await race.locator('#boost').isDisabled(), 'Replay resets bonus charge');
@@ -120,15 +165,15 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
 
     const queued = await open();
     await queued.getByRole('button', { name: 'На старт!' }).click();
-    await queued.keyboard.down('s'); await queued.clock.runFor(5000); await queued.keyboard.up('s');
+    await queued.keyboard.down('s'); await queued.clock.runFor(15000); await queued.keyboard.up('s');
     let queueSteer = null, waited = false, sawHandoff = false;
-    for (let i = 0; i < 210 && !(await queued.locator('#overlay').isVisible()); i++) {
+    for (let i = 0; i < 280 && !(await queued.locator('#overlay').isVisible()); i++) {
       const state = await queued.evaluate(() => observed);
       const obstacles = state.objects.filter(o => !o.taken && o.kind !== 'person' && o.d > state.player.d - 5 && o.d < state.player.d + 65);
       const target = [295, 385, 480, 575, 665].filter(x => obstacles.every(o => Math.abs(o.x-x) > (o.kind === 'barrier' ? 75 : 50))).sort((a,b) => Math.abs(a-state.player.x)-Math.abs(b-state.player.x))[0] ?? 480;
-      const steer = state.player.d >= 1280 || Math.abs(target-state.player.x) < 15 ? null : target > state.player.x ? 'd' : 'a';
+      const steer = state.player.d >= 1260 || Math.abs(target-state.player.x) < 15 ? null : target > state.player.x ? 'd' : 'a';
       if (queueSteer !== steer) { if (queueSteer) await queued.keyboard.up(queueSteer); if (steer) await queued.keyboard.down(steer); queueSteer = steer; }
-      if (state.player.d >= 1320 && state.gate.owner !== 'blue') {
+      if (state.player.d >= 1260 && state.player.speed < 1 && state.gate.owner !== 'blue') {
         assert(state.player.d < 1330, 'Queued truck stays outside the outer gate');
         assert.equal(state.player.finishTime, null); waited = true;
       }
@@ -141,8 +186,14 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
     }
     const queuedFinal = await queued.evaluate(() => observed);
     assert(waited && sawHandoff && queuedFinal.player.finishTime > 0, 'Queued player waits and then finishes');
+    const finishTimes = queuedFinal.cars.map(c => c.finishTime);
+    assert(finishTimes.every(t => Number.isFinite(t) && t > 0), 'All five trucks finish');
+    assert.equal(queuedFinal.cars.filter(c => c.finishTime < queuedFinal.player.finishTime).length, 4, 'Delayed player finishes fifth');
+    assert.equal(await queued.locator('#overlay-title').textContent(), '5-е место. Финиш!');
+    const resultScore = Number(await queued.locator('#score').textContent());
+    assert(Number.isFinite(resultScore) && resultScore > 0, 'Fifth-place result is a valid score');
     assert(queuedFinal.cars.filter(c => !c.isPlayer && c.finishTime !== null).every(c => Math.abs(c.x-480) > 52), 'Finished opponents park clear of the gate lane');
-    await screenshot(queued, '/tmp/convoy-v4-queued-finish.png');
+    await screenshot(queued, '/tmp/convoy-v5-queued-finish.png');
     await queued.close(); console.log('PASS: sluice queue, owner transfer, honest finish order and clear parking.');
 
     const mobile = await open({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 1 });
@@ -170,7 +221,7 @@ const baseURL = process.env.GAME_URL || 'http://127.0.0.1:8001/';
     await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await mobile.clock.runFor(100);
     assert(!(await mobile.locator('#mobile-brake').evaluate(e => e.classList.contains('pressed'))), 'Releasing touch releases the brake');
-    await screenshot(mobile, '/tmp/convoy-v4-mobile.png');
+    await screenshot(mobile, '/tmp/convoy-v5-mobile.png');
     await mobile.setViewportSize({ width: 320, height: 760 });
     assert(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Small mobile layout fits');
     await mobile.close();

@@ -9,7 +9,8 @@
     $('start').disabled = true; return;
   }
   const ROAD_LEFT = 225, ROAD_RIGHT = 735;
-  const FINISH = 1400, GATE_APPROACH = 1280, GATE_ENTRY = 1340, GATE_INNER = 1380, BOOST_DURATION = 2.2;
+  const FINISH = 1400, GATE_APPROACH = 1260, GATE_ENTRY = 1340, GATE_INNER = 1380, BOOST_DURATION = 2.2, SLOW_DURATION = 3;
+  const FINISH_BONUSES = [1000, 500, 250, 150, 100];
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const keys = new Set(), steeringPointers = new Map(), brakePointers = new Set();
   let mode = 'idle', cars = [], objects = [], particles = [], messages = [];
@@ -23,19 +24,25 @@
 
 
   function reset() {
-    player = { id: 'blue', name: 'Синий конвой', color: '#4298ff', x: 480, d: 0, speed: 0, hull: 100, penalty: 0, hitCooldown: 0, boost: 0, boostReady: false, finishTime: null, isPlayer: true };
-    cars = [player,
-      { id: 'red', name: 'Красный конвой', color: '#ff6479', x: 345, targetX: 345, d: -4, speed: 0, boost: 0, boostReady: false, hull: 100, penalty: 0, hitCooldown: 0, finishTime: null },
-      { id: 'yellow', name: 'Жёлтый конвой', color: '#ffd55c', x: 615, targetX: 615, d: -8, speed: 0, boost: 0, boostReady: false, hull: 100, penalty: 0, hitCooldown: 0, finishTime: null }];
+    player = { id: 'blue', name: 'Синий конвой', color: '#4298ff', x: 480, d: 0, speed: 0, hull: 100, penalty: 0, slow: 0, hitCooldown: 0, boost: 0, boostReady: false, finishTime: null, isPlayer: true };
+    const opponents = [
+      { id: 'red', name: 'Красный конвой', color: '#ff6479', x: 385, d: -4, parkX: 345, parkD: FINISH, phase: 0 },
+      { id: 'yellow', name: 'Жёлтый конвой', color: '#ffd55c', x: 575, d: -8, parkX: 615, parkD: FINISH, phase: 2 },
+      { id: 'orange', name: 'Оранжевый конвой', color: '#ff9d4d', x: 295, d: -12, parkX: 345, parkD: FINISH + 20, phase: 4 },
+      { id: 'purple', name: 'Фиолетовый конвой', color: '#b58aff', x: 665, d: -16, parkX: 615, parkD: FINISH + 20, phase: 6 }
+    ];
+    cars = [player, ...opponents.map(car => ({ ...car, targetX: car.x, speed: 0, boost: 0, boostReady: false, hull: 100, penalty: 0, slow: 0, hitCooldown: 0, finishTime: null }))];
     objects = []; particles = []; messages = []; pairCooldowns = new Map();
     elapsed = score = hitCount = 0; gateOwner = null; keys.clear(); steeringPointers.clear(); brakePointers.clear(); pointer = null; activePointer = null;
     objects.push({ kind: 'person', x: 480, d: 95, taken: false });
+    objects.push({ kind: 'employee', x: 480, d: 170, taken: false });
     objects.push({ kind: 'barrier', x: 480, d: 210, taken: false });
     const lanes = [295, 385, 480, 575, 665];
     for (let d = 270; d < FINISH - 110; d += 65) {
       const lane = Math.floor(random(0, lanes.length));
       objects.push({ kind: Math.floor(d / 65) % 3 === 0 ? 'barrier' : 'person', x: lanes[lane], d, taken: false });
       if (Math.floor(d / 65) % 2 === 0) objects.push({ kind: 'cone', x: lanes[(lane + 2) % lanes.length], d: d + 15, taken: false });
+      else if (d + 30 < GATE_APPROACH - 30) objects.push({ kind: 'employee', x: lanes[(lane + 1) % lanes.length], d: d + 30, taken: false });
     }
     lastHud = ''; updateHud();
   }
@@ -83,7 +90,7 @@
     mode = 'over'; keys.clear(); steeringPointers.clear(); brakePointers.clear(); pointer = null; activePointer = null;
     $('touch-controls').hidden = true; $('pause').disabled = true;
     const place = raceOrder().findIndex(car => car.isPlayer) + 1;
-    if (!wrecked) score += [1000, 500, 250][place - 1];
+    if (!wrecked) score += FINISH_BONUSES[place - 1];
     if (score > best) { best = score; try { localStorage.setItem('convoy-cup-best', String(best)); } catch {} }
     $('best').textContent = best;
     const title = wrecked ? 'Автозаку нужен ремонт' : place === 1 ? 'Первым в колонии!' : `${place}-е место. Финиш!`;
@@ -95,7 +102,7 @@
     $('announcement').textContent = `${title}. Очки: ${score}.`; updateHud();
   }
   function boost() {
-    if (mode !== 'playing' || !player.boostReady || player.boost > 0 || player.d >= GATE_APPROACH) return;
+    if (mode !== 'playing' || !player.boostReady || player.boost > 0 || player.slow > 0 || player.d >= GATE_APPROACH) return;
     if (keys.has('KeyS') || keys.has('ArrowDown') || brakePointers.size) return;
     player.boost = BOOST_DURATION; player.boostReady = false;
     popup('РАЗГОН! 2,2 СЕК', player.x, player.d + 18); updateHud();
@@ -123,11 +130,11 @@
       player.x = clamp(player.x, ROAD_LEFT + 29, ROAD_RIGHT - 29); damage(player, 5, .5, 'ЗАБОР −5%');
     }
     for (const car of cars) {
-      car.penalty = Math.max(0, car.penalty - dt); car.hitCooldown = Math.max(0, car.hitCooldown - dt); car.boost = Math.max(0, car.boost - dt);
+      car.penalty = Math.max(0, car.penalty - dt); car.slow = Math.max(0, car.slow - dt); car.hitCooldown = Math.max(0, car.hitCooldown - dt); car.boost = Math.max(0, car.boost - dt);
       if (car.finishTime !== null) {
-        car.speed = 0;
-        const parkingX = car.id === 'red' ? 345 : car.id === 'yellow' ? 615 : 480;
-        car.x += clamp(parkingX - car.x, -140 * dt, 140 * dt);
+        car.speed = car.d < car.parkD ? 8 : 0;
+        car.d = Math.min(car.parkD, car.d + car.speed * dt);
+        if (car.d >= car.parkD) car.x += clamp(car.parkX - car.x, -140 * dt, 140 * dt);
         continue;
       }
       let targetSpeed = 38, acceleration = 13;
@@ -137,11 +144,11 @@
         else if (car.boost > 0) { targetSpeed = 60; acceleration = 38; }
         $('mobile-brake').classList.toggle('pressed', !!braking);
       } else {
-        if (car.boostReady && car.boost <= 0 && car.d < GATE_APPROACH) { car.boost = BOOST_DURATION; car.boostReady = false; }
+        if (car.boostReady && car.boost <= 0 && car.slow <= 0 && car.d < GATE_APPROACH) { car.boost = BOOST_DURATION; car.boostReady = false; }
         if (car.boost > 0) { targetSpeed = 60; acceleration = 38; }
         const obstacle = objects.find(o => !o.taken && o.kind !== 'person' && o.d > car.d && o.d - car.d < 65 && Math.abs(o.x - car.x) < 60);
-        if (obstacle) car.targetX = obstacle.x > 480 ? obstacle.x - 115 : obstacle.x + 115;
-        else car.targetX += Math.sin(elapsed * .75 + (car.id === 'red' ? 0 : 2)) * dt * 16;
+        if (obstacle) car.targetX = obstacle.x > car.x ? obstacle.x - 115 : obstacle.x + 115;
+        else car.targetX += Math.sin(elapsed * .75 + car.phase) * dt * 16;
         car.targetX = clamp(car.targetX, ROAD_LEFT + 50, ROAD_RIGHT - 50);
         car.yaw = -clamp((car.targetX-car.x)/80, -.13, .13);
         if (car.d < GATE_APPROACH) car.x += clamp(car.targetX - car.x, -100 * dt, 100 * dt);
@@ -151,8 +158,9 @@
         car.x += clamp(480 - car.x, -140 * dt, 140 * dt); car.yaw = 0; car.boost = 0;
         targetSpeed = car === gateOwner ? 12 : car.d < GATE_ENTRY - 18 ? 12 : 0;
       }
+      if (car.slow > 0) targetSpeed = Math.min(targetSpeed, 18);
       if (car.penalty > 0) targetSpeed *= .48;
-      const deceleration = braking || car.penalty > 0 ? 52 : 38;
+      const deceleration = braking || car.penalty > 0 || car.slow > 0 ? 52 : 38;
       car.speed += clamp(targetSpeed - car.speed, -deceleration * dt, acceleration * dt);
       const oldDistance = car.d; car.d += car.speed * dt;
       if (car.d >= GATE_APPROACH && car !== gateOwner) {
@@ -169,6 +177,13 @@
           burst(object.x, object.d, '#ffffff', 8);
           car.boostReady = true;
           if (car.isPlayer) { score += 100; hitCount++; popup('+100 · РАЗГОН ГОТОВ', object.x, object.d + 12); $('announcement').textContent = 'Разгон получен. Нажми W, стрелку вверх или пробел.'; }
+        } else if (object.kind === 'employee') {
+          car.slow = SLOW_DURATION; car.boost = 0; car.speed = Math.min(car.speed, 18);
+          burst(object.x, object.d, '#86b9ff', 8);
+          if (car.isPlayer) {
+            popup('СОТРУДНИК · ЗАМЕДЛЕНИЕ 3 СЕК', object.x, object.d + 12, '#a6cbff');
+            $('announcement').textContent = 'Сбит сотрудник. Замедление на три секунды. Разгон временно недоступен.';
+          }
         } else damage(car, object.kind === 'barrier' ? 16 : 8, object.kind === 'barrier' ? 1.1 : .6, object.kind === 'barrier' ? 'ПРЕГРАДА −16%' : 'КОНУС −8%');
       }
     }
@@ -196,7 +211,7 @@
     const seconds = Math.floor(elapsed), tenths = Math.floor(elapsed * 10) % 10;
     const signature = `${place}:${Math.round(player.speed * 3.6)}:${player.hull}:${score}:${seconds}:${tenths}:${Math.floor(player.d)}:${order.map(c => c.id).join()}`;
     if (signature !== lastHud) {
-      $('place').innerHTML = `${place} <small>/ 3</small>`; $('speed').textContent = String(Math.round(player.speed * 3.6));
+      $('place').innerHTML = `${place} <small>/ ${cars.length}</small>`; $('speed').textContent = String(Math.round(player.speed * 3.6));
       $('hull').textContent = `${player.hull}%`; $('hull').classList.toggle('damaged', player.hull < 40);
       $('score').textContent = String(score);
       $('time').textContent = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}.${tenths}`;
@@ -208,11 +223,12 @@
     $('touch-controls').hidden = mode !== 'playing' || player.d >= GATE_APPROACH;
     $('mobile-brake').disabled = mode !== 'playing' || player.d >= GATE_APPROACH;
     if (mode !== 'playing') $('mobile-brake').classList.remove('pressed');
-    const disabled = mode !== 'playing' || !player.boostReady || player.boost > 0 || player.d >= GATE_APPROACH;
+    const disabled = mode !== 'playing' || !player.boostReady || player.boost > 0 || player.slow > 0 || player.d >= GATE_APPROACH;
     $('boost').disabled = disabled; $('mobile-boost').disabled = disabled;
-    $('boost-status').textContent = player.d >= GATE_APPROACH ? 'ВЪЕЗД В ШЛЮЗ' : player.boost > 0 ? `${player.boost.toFixed(1)} СЕК` : player.boostReady ? 'ГОТОВ' : 'СБЕЙ ФИГУРКУ';
+    $('boost-status').textContent = player.d >= GATE_APPROACH ? 'ВЪЕЗД В ШЛЮЗ' : player.slow > 0 ? `ЗАМЕДЛЕН ${player.slow.toFixed(1)} СЕК` : player.boost > 0 ? `${player.boost.toFixed(1)} СЕК` : player.boostReady ? 'ГОТОВ' : 'СБЕЙ ФИГУРКУ';
     $('boost-fill').style.width = `${player.boost > 0 ? 100 * player.boost / BOOST_DURATION : player.boostReady ? 100 : 0}%`;
-    $('drive-hint').textContent = player.d >= GATE_APPROACH ? (player === gateOwner ? 'ШЛЮЗ · ВЪЕЗЖАЕМ В КОЛОНИЮ' : 'КПП · ОЖИДАЕМ СВОБОДНЫЙ ШЛЮЗ') : player.boostReady ? 'W / ↑ / SPACE — РАЗГОН НА 2,2 СЕК' : 'СБЕЙ ФИГУРКУ → ПОЛУЧИ РАЗГОН';
+    $('arena').classList.toggle('slowed', player.slow > 0);
+    $('drive-hint').textContent = player.d >= GATE_APPROACH ? (player === gateOwner ? 'ШЛЮЗ · ВЪЕЗЖАЕМ В КОЛОНИЮ' : 'КПП · ОЖИДАЕМ СВОБОДНЫЙ ШЛЮЗ') : player.slow > 0 ? `СОТРУДНИК · ЗАМЕДЛЕНИЕ ${player.slow.toFixed(1)} СЕК` : player.boostReady ? 'W / ↑ / SPACE — РАЗГОН НА 2,2 СЕК' : 'ЧЁРНЫЕ → РАЗГОН · СИНИЕ → ЗАМЕДЛЕНИЕ';
   }
 
   function draw() {

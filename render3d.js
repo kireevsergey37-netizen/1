@@ -99,13 +99,27 @@
       for(let i=-1;i<=1;i++)this.box(x+i*w/4,y,z-.15,.055,h,.05,'#81989d');
       this.box(x,y,z-.15,w,.055,.05,'#81989d');
     }
-    person(x,y,z,uniform,variant=0,spectator=false) {
+    person(x,y,z,uniform,variant=0,spectator=false,camo=false) {
       const b=(xx,yy,zz,w,h,d,c)=>this.box(x+xx,y+yy,z+zz,w,h,d,c);
       b(0,1.12,0,.65,.83,.4,uniform); b(0,1.86,0,.46,.46,.42,['#edc19b','#bd875f','#f5d4ab','#a26b50'][variant%4]);
       b(0,2.13,0,.6,.18,.57,uniform);b(0,2.05,.15,.65,.08,.55,uniform);
       b(-.19,.39,0,.22,.65,.3,uniform);b(.19,.39,0,.22,.65,.3,uniform);
       if(!spectator){b(-.47,1.12,0,.2,.75,.26,uniform);b(.47,1.12,0,.2,.75,.26,uniform);}
-      b(0,1.21,-.215,.66,.1,.025,spectator?'#9ccee2':'#f7faf8');
+      if(camo){
+        const shades=['#224675','#689dcc','#3d73ad','#182f52'];
+        for(const face of [-1,1]){
+          for(let row=0;row<4;row++)for(let col=0;col<3;col++){
+            const pattern=(row*5+col*3+variant)%7;
+            if(pattern<5)b(-.22+col*.21,.84+row*.17,face*.215,.16,.13,.035,shades[pattern%4]);
+          }
+          for(const side of [-1,1]){
+            b(side*.19,.28,face*.165,.19,.16,.035,shades[(variant+1)%4]);
+            b(side*.19,.53,face*.165,.16,.12,.035,shades[(variant+2)%4]);
+            b(side*.47,1.2,face*.145,.17,.16,.035,shades[(variant+3)%4]);
+          }
+          b(-.13,2.14,face*.295,.22,.13,.035,shades[(variant+2)%4]);
+        }
+      }else b(0,1.21,-.215,.66,.1,.025,spectator?'#9ccee2':'#f7faf8');
       b(.16,1.42,-.23,.13,.15,.04,'#ffdc78');
     }
     car(car,player,time,reduced) {
@@ -228,6 +242,7 @@
       for(const object of objects){
         const z=(object.d-player.d)*.6,x=(480-object.x)/18;if(object.taken||z< -20||z>180)continue;
         if(object.kind==='person')this.person(x,0,z,'#151d26',Math.floor(object.d/65));
+        else if(object.kind==='employee')this.person(x,0,z,'#315e98',Math.floor(object.d/65),false,true);
         else if(object.kind==='barrier'){
           for(const xx of [-1.9,1.9])this.box(x+xx,.75,z,.25,1.5,.4,'#253442');
           this.box(x,1.25,z,5,.8,.35,'#f8cc6e');for(let xx=-2;xx<2.5;xx+=1)this.box(x+xx,1.25,z-.2,.35,.8,.05,'#273644');
@@ -241,7 +256,9 @@
       gl.useProgram(this.program);gl.bindBuffer(gl.ARRAY_BUFFER,this.buffer);gl.bindTexture(gl.TEXTURE_2D,this.texture);
       gl.bufferData(gl.ARRAY_BUFFER,this.vertices.subarray(0,this.count),gl.DYNAMIC_DRAW);
       const fov=.97+(player.boost>0&&!reduced?.06:0);
-      gl.uniformMatrix4fv(this.uMatrix,false,matrix([px*.65,8.8-4.4*Math.max(0,Math.min(1,(player.d-1300)/40)),-18+6*Math.max(0,Math.min(1,(player.d-1300)/40))],[px*.4,1.2,24],this.canvas.width/this.canvas.height,fov));
+      const aspect=this.canvas.width/this.canvas.height, back=aspect<1.2?34:26;
+      const approach=Math.max(0,Math.min(1,(player.d-1300)/40));
+      gl.uniformMatrix4fv(this.uMatrix,false,matrix([px*.65,8.8-4.4*approach,-back+(back-12)*approach],[px*.4,1.2,24],aspect,fov));
       gl.drawArrays(gl.TRIANGLES,0,this.count/8);
     }
   }
